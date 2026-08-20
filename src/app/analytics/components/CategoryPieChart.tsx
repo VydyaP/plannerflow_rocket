@@ -38,6 +38,8 @@ export default function CategoryPieChart({ data }: CategoryPieChartProps) {
           paddingAngle={3}
           dataKey="value"
           stroke="none"
+          animationDuration={400}
+          animationEasing="ease-out"
         >
           {data.map((entry, index) => (
             <Cell key={`pie-cell-${index}`} fill={entry.color} />

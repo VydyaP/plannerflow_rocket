@@ -1,0 +1,31 @@
+{
+  "name": "PlannerFlow — Your Calm Daily Planner",
+  "short_name": "PlannerFlow",
+  "description": "PlannerFlow helps you plan your day with time-blocked tasks, category tracking, analytics, and reminders — all in a calm, minimal interface.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#6C63FF",
+  "background_color": "#F8F7FF",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

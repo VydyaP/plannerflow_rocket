@@ -43,7 +43,7 @@ export default function WeeklyBarChart({ data }: WeeklyBarChartProps) {
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-sans)' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-sans)' }} axisLine={false} tickLine={false} />
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--secondary)', radius: 8 }} />
-        <Bar dataKey="hours" radius={[6, 6, 0, 0]} fill="url(#barGrad)">
+        <Bar dataKey="hours" radius={[6, 6, 0, 0]} fill="url(#barGrad)" animationDuration={400} animationEasing="ease-out">
           {data.map((entry, index) => (
             <Cell
               key={`cell-${index}`}

@@ -1,9 +1,12 @@
 'use client';
 import React, { useState } from 'react';
+import { AnimatePresence, motion, type PanInfo } from 'motion/react';
 import { Plus, Bell, BellOff, Trash2, Clock, Calendar, StickyNote, Repeat2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { MOCK_REMINDERS } from '@/lib/plannerData';
 import type { Reminder, Category, RepeatPreset, DayOfWeek } from '@/lib/plannerData';
+import { useAuthUser } from '@/lib/useAuthUser';
+import { useReminders } from '@/lib/useFirestoreCollection';
+import { listItemVariants } from '@/lib/motion';
 import CategoryBadge from '@/app/daily-planner/components/CategoryBadge';
 
 type FilterType = 'all' | 'today' | 'upcoming' | 'recurring';
@@ -28,10 +31,6 @@ const REPEAT_PRESETS: { key: RepeatPreset; label: string; desc: string }[] = [
   { key: 'weekends', label: 'Weekends', desc: 'Sat & Sun' },
   { key: 'custom', label: 'Custom', desc: 'Pick days' },
 ];
-
-function generateId() {
-  return `rem-${Date.now()}`;
-}
 
 function isToday(date: string): boolean {
   return date === TODAY;
@@ -82,10 +81,17 @@ const DEFAULT_FORM: ReminderFormState = {
 };
 
 export default function RemindersClient() {
-  const [reminders, setReminders] = useState<Reminder[]>(MOCK_REMINDERS);
+  const { uid, loading: authLoading } = useAuthUser();
+  const {
+    data: reminders,
+    loading: remindersLoading,
+    error: remindersError,
+    add: addReminder,
+    update: updateReminder,
+    remove: removeReminder,
+  } = useReminders();
   const [filter, setFilter] = useState<FilterType>('all');
   const [showForm, setShowForm] = useState(false);
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<ReminderFormState>(DEFAULT_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof ReminderFormState, string>>>({});
 
@@ -108,21 +114,31 @@ export default function RemindersClient() {
   ];
 
   // ── Handlers ───────────────────────────────────────────────────────────────
+  const reportError = (err: unknown, fallback: string) => {
+    toast.error(err instanceof Error ? err.message : fallback);
+  };
+
   const handleToggle = (id: string) => {
-    setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
+    const reminder = reminders.find((r) => r.id === id);
+    if (!reminder) return;
+    updateReminder(id, { enabled: !reminder.enabled }).catch((err) =>
+      reportError(err, 'Could not update reminder')
+    );
   };
 
   const handleDelete = (id: string) => {
-    setDeletingIds((prev) => new Set(prev).add(id));
-    setTimeout(() => {
-      setReminders((prev) => prev.filter((r) => r.id !== id));
-      setDeletingIds((prev) => {
-        const n = new Set(prev);
-        n.delete(id);
-        return n;
-      });
-      toast.success('Reminder removed');
-    }, 300);
+    removeReminder(id)
+      .then(() => toast.success('Reminder removed'))
+      .catch((err) => reportError(err, 'Could not delete reminder'));
+  };
+
+  // Swipe-left-to-delete, mirroring the daily planner's mobile cards —
+  // fires past a distance threshold or a fast flick, otherwise Motion
+  // springs the card back via dragConstraints.
+  const handleSwipeEnd = (id: string, info: PanInfo) => {
+    if (info.offset.x < -100 || info.velocity.x < -500) {
+      handleDelete(id);
+    }
   };
 
   const toggleRepeatDay = (day: DayOfWeek) => {
@@ -156,8 +172,7 @@ export default function RemindersClient() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    const newReminder: Reminder = {
-      id: generateId(),
+    const newReminder: Omit<Reminder, 'id'> = {
       taskName: form.taskName.trim(),
       date: form.date,
       time: form.hasTime ? form.time : '',
@@ -167,13 +182,38 @@ export default function RemindersClient() {
       repeat: form.repeat,
       repeatDays: form.repeat === 'custom' ? form.repeatDays : [],
     };
-    setReminders((prev) => [newReminder, ...prev]);
+    addReminder(newReminder)
+      .then(() => toast.success('Reminder set successfully'))
+      .catch((err) => reportError(err, 'Could not set reminder'));
     setForm(DEFAULT_FORM);
     setShowForm(false);
-    toast.success('Reminder set successfully');
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  if (authLoading || remindersLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 animate-pulse">
+          <Bell size={28} className="text-primary" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Loading your reminders…</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">Just a moment while we fetch your data.</p>
+      </div>
+    );
+  }
+
+  if (remindersError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+          <Bell size={28} className="text-red-500" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Couldn&apos;t load your reminders</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">{remindersError}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -192,8 +232,15 @@ export default function RemindersClient() {
       </div>
 
       {/* Add reminder form */}
-      {showForm && (
-        <div className="bg-card rounded-3xl border border-border shadow-card p-6 animate-slide-up">
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ opacity: 0, y: 12, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto', transition: { duration: 0.2, ease: 'easeOut' } }}
+            exit={{ opacity: 0, y: -8, height: 0, transition: { duration: 0.15, ease: 'easeIn' } }}
+            className="overflow-hidden"
+          >
+          <div className="bg-card rounded-3xl border border-border shadow-card p-6">
           <h3 className="text-base font-bold text-foreground mb-5">New Reminder</h3>
           <form onSubmit={handleSubmit} className="space-y-5">
 
@@ -357,8 +404,10 @@ export default function RemindersClient() {
               </button>
             </div>
           </form>
-        </div>
-      )}
+          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2">
@@ -396,18 +445,32 @@ export default function RemindersClient() {
         </div>
       ) : (
         <div className="space-y-3">
+          <AnimatePresence initial={false}>
           {filtered.map((reminder) => {
-            const isDeleting = deletingIds.has(reminder.id);
             const repeatLabel = getRepeatLabel(reminder.repeat, reminder.repeatDays);
             const recurring = isRecurring(reminder.repeat);
 
             return (
-              <div
+              <motion.div
                 key={reminder.id}
-                className={`bg-card rounded-2xl border shadow-soft p-4 transition-all duration-300 ${
-                  isDeleting ? 'opacity-0 -translate-y-2' : 'opacity-100'
-                } ${recurring ? 'border-primary/20' : 'border-border'}`}
+                layout
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                variants={listItemVariants}
+                className="relative overflow-hidden rounded-2xl"
               >
+                <div className="absolute inset-0 flex items-center justify-end rounded-2xl bg-red-500 pr-6">
+                  <Trash2 size={20} className="text-white" />
+                </div>
+                <motion.div
+                  drag="x"
+                  dragConstraints={{ left: -96, right: 0 }}
+                  dragElastic={{ left: 0.2, right: 0 }}
+                  dragTransition={{ bounceStiffness: 400, bounceDamping: 40 }}
+                  onDragEnd={(_, info) => handleSwipeEnd(reminder.id, info)}
+                  className={`relative bg-card rounded-2xl border shadow-soft p-4 ${recurring ? 'border-primary/20' : 'border-border'}`}
+                >
                 <div className="flex items-start gap-4">
                   {/* Icon */}
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${recurring ? 'bg-primary/10' : 'bg-secondary'}`}>
@@ -503,9 +566,11 @@ export default function RemindersClient() {
                     </div>
                   </div>
                 </div>
-              </div>
+                </motion.div>
+              </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>
       )}
     </div>

@@ -12,8 +12,6 @@ import {
   Settings,
   UserCircle,
 } from 'lucide-react';
-import Icon from '@/components/ui/AppIcon';
-
 
 const NAV_ITEMS = [
   { href: '/', label: 'Calendar', icon: CalendarDays, badge: null },
@@ -59,7 +57,7 @@ export default function Sidebar({ activePath }: SidebarProps) {
             <Link
               key={`nav-${item.href}`}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 active:scale-95 group relative ${
                 isActive
                   ? 'bg-primary/10 text-primary shadow-soft'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -91,7 +89,7 @@ export default function Sidebar({ activePath }: SidebarProps) {
       <div className="p-3 border-t border-border">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-150"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-150 active:scale-95"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span>Collapse</span></>}

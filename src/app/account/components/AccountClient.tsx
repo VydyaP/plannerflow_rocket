@@ -3,20 +3,16 @@ import React, { useState } from 'react';
 import {
   User,
   Mail,
-  RefreshCw,
-  LogIn,
+  LogOut,
   Shield,
   Bell,
   Smartphone,
   ChevronRight,
   CheckCircle2,
-  Clock,
-  AlertCircle,
 } from 'lucide-react';
+import { useAuthUser, signOutUser } from '@/lib/useAuthUser';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type SyncStatus = 'connected' | 'pending' | 'disconnected';
 
 interface AccountSetting {
   id: string;
@@ -24,16 +20,6 @@ interface AccountSetting {
   description: string;
   icon: React.ReactNode;
 }
-
-// ─── Mock placeholder data (replace with real auth data when Google auth connects) ──
-
-const PLACEHOLDER_USER = {
-  name: 'Your Name',
-  email: 'yourname@gmail.com',
-  avatarInitials: 'YN',
-  syncStatus: 'disconnected' as SyncStatus,
-  lastSynced: null as string | null,
-};
 
 const ACCOUNT_SETTINGS: AccountSetting[] = [
   {
@@ -56,31 +42,14 @@ const ACCOUNT_SETTINGS: AccountSetting[] = [
   },
 ];
 
-// ─── Sync status badge ────────────────────────────────────────────────────────
-
-function SyncBadge({ status }: { status: SyncStatus }) {
-  if (status === 'connected') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-        <CheckCircle2 size={12} />
-        Synced
-      </span>
-    );
+function getInitials(name: string | null, email: string | null): string {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    return parts.length === 1
+      ? parts[0].slice(0, 2).toUpperCase()
+      : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
-  if (status === 'pending') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-        <Clock size={12} />
-        Syncing…
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-secondary text-muted-foreground border border-border">
-      <AlertCircle size={12} />
-      Not connected
-    </span>
-  );
+  return (email ?? '?').slice(0, 2).toUpperCase();
 }
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -99,15 +68,31 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AccountClient() {
-  const [user] = useState(PLACEHOLDER_USER);
+  const { user } = useAuthUser();
+  const [signingOut, setSigningOut] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
+
+  const name = user?.displayName ?? 'Your Name';
+  const email = user?.email ?? '';
+  const photoURL = user?.photoURL ?? null;
+  const initials = getInitials(user?.displayName ?? null, user?.email ?? null);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOutUser();
+    } catch {
+      setSigningOut(false);
+    }
+  };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground tracking-tight">Account</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Manage your profile and Google sync settings
+          Manage your profile and account settings
         </p>
       </div>
 
@@ -115,61 +100,64 @@ export default function AccountClient() {
       <Section title="Profile">
         <div className="flex items-center gap-5">
           {/* Avatar */}
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <span className="text-xl font-bold text-primary">{user.avatarInitials}</span>
-          </div>
+          {photoURL && !photoError ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photoURL}
+              alt={name}
+              referrerPolicy="no-referrer"
+              onError={() => setPhotoError(true)}
+              className="w-16 h-16 rounded-2xl object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-xl font-bold text-primary">{initials}</span>
+            </div>
+          )}
 
           {/* Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <User size={14} className="text-muted-foreground flex-shrink-0" />
-              <span className="text-base font-semibold text-foreground truncate">{user.name}</span>
+              <span className="text-base font-semibold text-foreground truncate">{name}</span>
             </div>
             <div className="flex items-center gap-2">
               <Mail size={14} className="text-muted-foreground flex-shrink-0" />
-              <span className="text-sm text-muted-foreground truncate">{user.email}</span>
+              <span className="text-sm text-muted-foreground truncate">{email}</span>
             </div>
           </div>
         </div>
       </Section>
 
-      {/* Google Sync */}
-      <Section title="Google Sync">
+      {/* Google account */}
+      <Section title="Google Account">
         <div className="space-y-4">
           {/* Status row */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-foreground">Sync status</p>
+              <p className="text-sm font-medium text-foreground">Signed in</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {user.syncStatus === 'connected' && user.lastSynced
-                  ? `Last synced ${user.lastSynced}`
-                  : 'Connect your Google account to sync data across devices'}
+                Your tasks and reminders are synced to this Google account.
               </p>
             </div>
-            <SyncBadge status={user.syncStatus} />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle2 size={12} />
+              Connected
+            </span>
           </div>
 
           {/* Divider */}
           <div className="border-t border-border" />
 
-          {/* Connect button */}
+          {/* Sign out button */}
           <button
-            disabled
-            className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-muted-foreground cursor-not-allowed opacity-70 transition-all"
-            title="Google auth coming soon"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card text-sm font-medium text-foreground hover:bg-secondary active:scale-95 transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
           >
-            <LogIn size={16} />
-            Sign in with Google
+            <LogOut size={16} />
+            {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
-
-          {/* Info note */}
-          <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-primary/5 border border-primary/10">
-            <RefreshCw size={14} className="text-primary mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Google authentication is not yet wired up. This page is ready to display your real
-              name, email, and sync status once connected.
-            </p>
-          </div>
         </div>
       </Section>
 
@@ -181,7 +169,7 @@ export default function AccountClient() {
               <button
                 disabled
                 className="w-full flex items-center gap-4 px-3 py-3 rounded-xl text-left hover:bg-secondary transition-all duration-150 group opacity-60 cursor-not-allowed"
-                title="Available after Google auth connects"
+                title="Coming soon"
               >
                 <span className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground flex-shrink-0">
                   {setting.icon}

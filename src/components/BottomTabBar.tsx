@@ -1,9 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
-import { CalendarDays, LayoutList, BarChart2, Bell, Settings, UserCircle } from 'lucide-react';
-import Icon from '@/components/ui/AppIcon';
-
+import { CalendarDays, LayoutList, BarChart2, Bell, Settings } from 'lucide-react';
 
 const TABS = [
   { href: '/', label: 'Calendar', icon: CalendarDays },
@@ -11,7 +9,6 @@ const TABS = [
   { href: '/analytics', label: 'Analytics', icon: BarChart2 },
   { href: '/reminders', label: 'Reminders', icon: Bell },
   { href: '/settings', label: 'Settings', icon: Settings },
-  { href: '/account', label: 'Account', icon: UserCircle },
 ];
 
 interface BottomTabBarProps {
@@ -29,7 +26,7 @@ export default function BottomTabBar({ activePath }: BottomTabBarProps) {
             <Link
               key={`tab-${tab.href}`}
               href={tab.href}
-              className={`flex flex-col items-center gap-1 flex-1 py-2 rounded-xl transition-all duration-150 ${
+              className={`flex flex-col items-center gap-1 flex-1 py-2 rounded-xl transition-all duration-150 active:scale-95 ${
                 isActive ? 'text-primary' : 'text-muted-foreground'
               }`}
             >

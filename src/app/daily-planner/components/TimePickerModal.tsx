@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'motion/react';
 import { X, Clock } from 'lucide-react';
 
 interface TimePickerModalProps {
@@ -78,8 +79,21 @@ export default function TimePickerModal({ value, label, onConfirm, onClose }: Ti
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card rounded-3xl shadow-card border border-border p-6 w-full max-w-sm animate-fade-in">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 4, transition: { duration: 0.12 } }}
+        transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+        className="relative bg-card rounded-3xl shadow-card border border-border p-6 w-full max-w-sm"
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -222,7 +236,7 @@ export default function TimePickerModal({ value, label, onConfirm, onClose }: Ti
             Set Time
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

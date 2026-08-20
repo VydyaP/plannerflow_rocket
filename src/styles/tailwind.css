@@ -42,6 +42,44 @@
   --cat-other-dot: #9CA3AF;
 }
 
+.dark {
+  --background: #14121F;
+  --foreground: #EDEBFA;
+  --primary: #7C74FF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #211F35;
+  --secondary-foreground: #C7C2F5;
+  --accent: #FBBF24;
+  --accent-foreground: #1E1B4B;
+  --muted: #262340;
+  --muted-foreground: #9891B8;
+  --card: #1C1A2E;
+  --card-foreground: #EDEBFA;
+  --border: #322F4D;
+  --input: #211F35;
+  --ring: #7C74FF;
+
+  /* Category colors */
+  --cat-work: #1E293B;
+  --cat-work-text: #93C5FD;
+  --cat-work-dot: #60A5FA;
+  --cat-personal: #3B1230;
+  --cat-personal-text: #F9A8D4;
+  --cat-personal-dot: #F472B6;
+  --cat-study: #0F2E22;
+  --cat-study-text: #6EE7B7;
+  --cat-study-dot: #34D399;
+  --cat-break: #3A2A0B;
+  --cat-break-text: #FCD34D;
+  --cat-break-dot: #FBBF24;
+  --cat-health: #2C1F4A;
+  --cat-health-text: #C4B5FD;
+  --cat-health-dot: #A78BFA;
+  --cat-other: #2A2A32;
+  --cat-other-text: #D1D5DB;
+  --cat-other-dot: #9CA3AF;
+}
+
 @layer base {
   * {
     box-sizing: border-box;

@@ -1,5 +1,6 @@
 'use client';
 import React, { useState } from 'react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft,
@@ -13,8 +14,10 @@ import {
   Flame,
   Plus,
 } from 'lucide-react';
-import { MOCK_TASKS, CATEGORY_CONFIG, formatDateKey, calcDurationMinutes } from '@/lib/plannerData';
-import type { Category } from '@/lib/plannerData';
+import { CATEGORY_CONFIG, formatDateKey, calcDurationMinutes } from '@/lib/plannerData';
+import type { Category, Task } from '@/lib/plannerData';
+import { useAuthUser } from '@/lib/useAuthUser';
+import { useTasks } from '@/lib/useFirestoreCollection';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -22,16 +25,22 @@ const MONTHS = [
   'July','August','September','October','November','December',
 ];
 
-function getTasksForDate(dateKey: string) {
-  return MOCK_TASKS.filter((t) => t.date === dateKey);
+const monthGridVariants: Variants = {
+  enter: (dir: number) => ({ opacity: 0, x: dir >= 0 ? 24 : -24 }),
+  center: { opacity: 1, x: 0, transition: { duration: 0.2, ease: 'easeOut' } },
+  exit: (dir: number) => ({ opacity: 0, x: dir >= 0 ? -24 : 24, transition: { duration: 0.15, ease: 'easeIn' } }),
+};
+
+function getTasksForDate(tasks: Task[], dateKey: string) {
+  return tasks.filter((t) => t.date === dateKey);
 }
 
-function getTotalHours(tasks: ReturnType<typeof getTasksForDate>) {
+function getTotalHours(tasks: Task[]) {
   const mins = tasks.reduce((acc, t) => acc + Math.max(0, calcDurationMinutes(t.startTime, t.endTime)), 0);
   return (mins / 60).toFixed(1);
 }
 
-function getTopCategory(tasks: ReturnType<typeof getTasksForDate>): Category | null {
+function getTopCategory(tasks: Task[]): Category | null {
   if (tasks.length === 0) return null;
   const counts: Partial<Record<Category, number>> = {};
   tasks.forEach((t) => {
@@ -42,9 +51,17 @@ function getTopCategory(tasks: ReturnType<typeof getTasksForDate>): Category | n
 
 export default function CalendarGrid() {
   const router = useRouter();
+  const { uid, loading: authLoading } = useAuthUser();
+  const { data: tasks, loading: tasksLoading, error: tasksError } = useTasks();
   const today = new Date(2026, 7, 20); // Aug 20 2026
   const [viewDate, setViewDate] = useState(new Date(2026, 7, 1));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const [navDirection, setNavDirection] = useState(0);
+
+  const goToMonth = (delta: number) => {
+    setNavDirection(delta);
+    setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  };
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -66,13 +83,37 @@ export default function CalendarGrid() {
   }
 
   const selectedKey = formatDateKey(selectedDate);
-  const selectedTasks = getTasksForDate(selectedKey);
+  const selectedTasks = getTasksForDate(tasks, selectedKey);
   const completedCount = selectedTasks.filter((t) => t.completed).length;
   const completionRate = selectedTasks.length > 0 ? Math.round((completedCount / selectedTasks.length) * 100) : 0;
   const topCat = getTopCategory(selectedTasks);
 
   const isToday = (date: Date) => formatDateKey(date) === formatDateKey(today);
   const isSelected = (date: Date) => formatDateKey(date) === selectedKey;
+
+  if (authLoading || tasksLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 animate-pulse">
+          <CalendarDays size={28} className="text-primary" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Loading your calendar…</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">Just a moment while we fetch your tasks.</p>
+      </div>
+    );
+  }
+
+  if (tasksError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+          <CalendarDays size={28} className="text-red-500" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Couldn&apos;t load your calendar</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">{tasksError}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -113,7 +154,7 @@ export default function CalendarGrid() {
           {/* Month nav */}
           <div className="flex items-center justify-between mb-6">
             <button
-              onClick={() => setViewDate(new Date(year, month - 1, 1))}
+              onClick={() => goToMonth(-1)}
               className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95"
               aria-label="Previous month"
             >
@@ -123,7 +164,7 @@ export default function CalendarGrid() {
               {MONTHS[month]} {year}
             </h2>
             <button
-              onClick={() => setViewDate(new Date(year, month + 1, 1))}
+              onClick={() => goToMonth(1)}
               className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95"
               aria-label="Next month"
             >
@@ -141,15 +182,25 @@ export default function CalendarGrid() {
           </div>
 
           {/* Day cells */}
-          <div className="grid grid-cols-7 gap-1">
+          <div className="relative overflow-hidden">
+          <AnimatePresence mode="wait" custom={navDirection} initial={false}>
+          <motion.div
+            key={`${year}-${month}`}
+            custom={navDirection}
+            variants={monthGridVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            className="grid grid-cols-7 gap-1"
+          >
             {cells.map((cell, i) => {
               const key = formatDateKey(cell.date);
-              const tasks = getTasksForDate(key);
-              const hasWork = tasks.some((t) => t.category === 'Work');
-              const hasStudy = tasks.some((t) => t.category === 'Study');
-              const hasHealth = tasks.some((t) => t.category === 'Health');
-              const hasPersonal = tasks.some((t) => t.category === 'Personal');
-              const hasBreak = tasks.some((t) => t.category === 'Break');
+              const cellTasks = getTasksForDate(tasks, key);
+              const hasWork = cellTasks.some((t) => t.category === 'Work');
+              const hasStudy = cellTasks.some((t) => t.category === 'Study');
+              const hasHealth = cellTasks.some((t) => t.category === 'Health');
+              const hasPersonal = cellTasks.some((t) => t.category === 'Personal');
+              const hasBreak = cellTasks.some((t) => t.category === 'Break');
               const isTod = isToday(cell.date);
               const isSel = isSelected(cell.date);
 
@@ -169,7 +220,7 @@ export default function CalendarGrid() {
                   <span className={`text-sm font-semibold mb-1 ${isSel ? 'text-white' : isTod ? 'text-primary' : 'text-foreground'}`}>
                     {cell.date.getDate()}
                   </span>
-                  {tasks.length > 0 && (
+                  {cellTasks.length > 0 && (
                     <div className="flex flex-wrap gap-0.5 justify-center">
                       {hasWork && <span className={`w-1.5 h-1.5 rounded-full ${isSel ? 'bg-white/70' : 'bg-blue-400'}`} />}
                       {hasStudy && <span className={`w-1.5 h-1.5 rounded-full ${isSel ? 'bg-white/70' : 'bg-emerald-400'}`} />}
@@ -181,6 +232,8 @@ export default function CalendarGrid() {
                 </button>
               );
             })}
+          </motion.div>
+          </AnimatePresence>
           </div>
 
           {/* Legend */}

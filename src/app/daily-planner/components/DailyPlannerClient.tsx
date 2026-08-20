@@ -1,6 +1,8 @@
 'use client';
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { AnimatePresence, motion, type PanInfo } from 'motion/react';
+import { listItemVariants } from '@/lib/motion';
 import {
   Plus,
   Trash2,
@@ -15,7 +17,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  MOCK_TASKS,
   CATEGORY_CONFIG,
   calcDuration,
   calcDurationMinutes,
@@ -23,14 +24,12 @@ import {
   formatDisplayTime,
 } from '@/lib/plannerData';
 import type { Task, Category } from '@/lib/plannerData';
+import { useAuthUser } from '@/lib/useAuthUser';
+import { useTasks } from '@/lib/useFirestoreCollection';
 import TimePickerModal from './TimePickerModal';
 import CategoryBadge from './CategoryBadge';
 
 const CATEGORIES: Category[] = ['Work', 'Personal', 'Study', 'Break', 'Health', 'Other'];
-
-function generateId() {
-  return `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
 
 function buildDateRange(center: Date): Date[] {
   const dates: Date[] = [];
@@ -51,12 +50,21 @@ export default function DailyPlannerClient() {
   const initialDate = paramDate ? new Date(paramDate + 'T00:00:00') : new Date(2026, 7, 20);
 
   const [currentDate, setCurrentDate] = useState<Date>(initialDate);
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const { uid, loading: authLoading } = useAuthUser();
+  const { data: tasks, loading: tasksLoading, error: tasksError, add: addTask, update: updateTask, remove: removeTask } = useTasks();
+  const [descriptionDrafts, setDescriptionDrafts] = useState<Record<string, string>>({});
+  const descriptionTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [timePickerTarget, setTimePickerTarget] = useState<{ taskId: string; field: 'startTime' | 'endTime' } | null>(null);
   const [categoryDropdownId, setCategoryDropdownId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timers = descriptionTimers.current;
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
 
   const dateKey = formatDateKey(currentDate);
   const dayTasks = tasks
@@ -70,9 +78,12 @@ export default function DailyPlannerClient() {
 
   const handleDateChange = (date: Date) => setCurrentDate(date);
 
+  const reportError = (err: unknown, fallback: string) => {
+    toast.error(err instanceof Error ? err.message : fallback);
+  };
+
   const handleAddTask = () => {
-    const newTask: Task = {
-      id: generateId(),
+    const newTask: Omit<Task, 'id'> = {
       date: dateKey,
       startTime: '09:00',
       endTime: '10:00',
@@ -80,39 +91,49 @@ export default function DailyPlannerClient() {
       category: 'Work',
       completed: false,
     };
-    setTasks((prev) => [...prev, newTask]);
-    toast.success('Task added — fill in the details');
+    addTask(newTask)
+      .then(() => toast.success('Task added — fill in the details'))
+      .catch((err) => reportError(err, 'Could not add task'));
   };
 
   const handleDeleteTask = (id: string) => {
-    setDeletingIds((prev) => new Set(prev).add(id));
-    setTimeout(() => {
-      setTasks((prev) => prev.filter((t) => t.id !== id));
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      toast.success('Task removed');
-    }, 300);
+    removeTask(id)
+      .then(() => toast.success('Task removed'))
+      .catch((err) => reportError(err, 'Could not delete task'));
+  };
+
+  // Swipe-left-to-delete on the mobile card layout. Fires past a distance
+  // threshold or a fast flick; otherwise Motion springs the card back via
+  // dragConstraints.
+  const handleSwipeEnd = (id: string, info: PanInfo) => {
+    if (info.offset.x < -100 || info.velocity.x < -500) {
+      handleDeleteTask(id);
+    }
   };
 
   const handleToggleComplete = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    updateTask(id, { completed: !task.completed }).catch((err) =>
+      reportError(err, 'Could not update task')
     );
   };
 
+  // Reflects every keystroke locally right away (so the input stays snappy),
+  // and debounces the Firestore write so rapid typing doesn't fire a write
+  // per character.
   const handleDescriptionChange = (id: string, value: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, description: value } : t))
-    );
+    setDescriptionDrafts((prev) => ({ ...prev, [id]: value }));
+    if (descriptionTimers.current[id]) clearTimeout(descriptionTimers.current[id]);
+    descriptionTimers.current[id] = setTimeout(() => {
+      updateTask(id, { description: value }).catch((err) =>
+        reportError(err, 'Could not update task')
+      );
+    }, 500);
   };
 
   const handleCategoryChange = (id: string, cat: Category) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, category: cat } : t))
-    );
+    updateTask(id, { category: cat }).catch((err) => reportError(err, 'Could not update task'));
     setCategoryDropdownId(null);
   };
 
@@ -124,9 +145,8 @@ export default function DailyPlannerClient() {
   const handleTimeSelected = (time: string) => {
     if (!timePickerTarget) return;
     const { taskId, field } = timePickerTarget;
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, [field]: time } : t))
-    );
+    const patch = field === 'startTime' ? { startTime: time } : { endTime: time };
+    updateTask(taskId, patch).catch((err) => reportError(err, 'Could not update task'));
     setTimePickerOpen(false);
     setTimePickerTarget(null);
   };
@@ -156,6 +176,30 @@ export default function DailyPlannerClient() {
 
   const currentTimePickerValue = timePickerTarget
     ? tasks.find((t) => t.id === timePickerTarget.taskId)?.[timePickerTarget.field] ?? '09:00' :'09:00';
+
+  if (authLoading || tasksLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 animate-pulse">
+          <ListTodo size={28} className="text-primary" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Loading your planner…</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">Just a moment while we fetch your tasks.</p>
+      </div>
+    );
+  }
+
+  if (tasksError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+          <ListTodo size={28} className="text-red-500" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Couldn&apos;t load your planner</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">{tasksError}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -308,15 +352,20 @@ export default function DailyPlannerClient() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {dayTasks.map((task) => {
-              const isDeleting = deletingIds.has(task.id);
+            <AnimatePresence initial={false}>
+              {dayTasks.map((task) => {
               const duration = calcDuration(task.startTime, task.endTime);
               const cfg = CATEGORY_CONFIG[task.category];
 
               return (
-                <div
+                <motion.div
                   key={task.id}
-                  className={`transition-all duration-300 ${isDeleting ? 'opacity-0 -translate-y-2' : 'opacity-100'}`}
+                  layout
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  variants={listItemVariants}
+                  className="overflow-hidden"
                   style={{ backgroundColor: task.completed ? undefined : cfg.bg + '55' }}
                 >
                   {/* Desktop row */}
@@ -371,7 +420,7 @@ export default function DailyPlannerClient() {
                     <div className="col-span-4">
                       <input
                         type="text"
-                        value={task.description}
+                        value={descriptionDrafts[task.id] ?? task.description}
                         onChange={(e) => handleDescriptionChange(task.id, e.target.value)}
                         placeholder="What are you working on?"
                         className={`w-full bg-transparent text-sm font-medium placeholder:text-muted-foreground/60 border-none outline-none focus:ring-0 ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
@@ -417,55 +466,69 @@ export default function DailyPlannerClient() {
                     </div>
                   </div>
 
-                  {/* Mobile card */}
-                  <div className="md:hidden p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <button onClick={() => handleToggleComplete(task.id)} className="mt-0.5 flex-shrink-0">
-                        {task.completed ? (
-                          <CheckCircle2 size={20} className="text-emerald-500" />
-                        ) : (
-                          <Circle size={20} className="text-muted-foreground" />
-                        )}
-                      </button>
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={task.description}
-                          onChange={(e) => handleDescriptionChange(task.id, e.target.value)}
-                          placeholder="What are you working on?"
-                          className={`w-full bg-transparent text-sm font-medium placeholder:text-muted-foreground/60 border-none outline-none ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                        />
-                        <div className="flex items-center gap-3 mt-2 flex-wrap">
-                          <button
-                            onClick={() => openTimePicker(task.id, 'startTime')}
-                            className="flex items-center gap-1 text-xs font-semibold font-tabular text-muted-foreground hover:text-primary"
-                          >
-                            <Clock size={11} />
-                            {formatDisplayTime(task.startTime)}
-                          </button>
-                          <span className="text-muted-foreground text-xs">→</span>
-                          <button
-                            onClick={() => openTimePicker(task.id, 'endTime')}
-                            className="flex items-center gap-1 text-xs font-semibold font-tabular text-muted-foreground hover:text-primary"
-                          >
-                            <Clock size={11} />
-                            {formatDisplayTime(task.endTime)}
-                          </button>
-                          <span className="text-xs text-muted-foreground">({duration})</span>
-                          <CategoryBadge category={task.category} size="sm" />
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 flex-shrink-0"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                  {/* Mobile card — swipe left to delete */}
+                  <div className="md:hidden relative overflow-hidden">
+                    <div className="absolute inset-0 flex items-center justify-end bg-red-500 pr-6">
+                      <Trash2 size={20} className="text-white" />
                     </div>
+                    <motion.div
+                      drag="x"
+                      dragConstraints={{ left: -96, right: 0 }}
+                      dragElastic={{ left: 0.2, right: 0 }}
+                      dragTransition={{ bounceStiffness: 400, bounceDamping: 40 }}
+                      onDragEnd={(_, info) => handleSwipeEnd(task.id, info)}
+                      className="relative bg-card p-4 space-y-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <button onClick={() => handleToggleComplete(task.id)} className="mt-0.5 flex-shrink-0">
+                          {task.completed ? (
+                            <CheckCircle2 size={20} className="text-emerald-500" />
+                          ) : (
+                            <Circle size={20} className="text-muted-foreground" />
+                          )}
+                        </button>
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={descriptionDrafts[task.id] ?? task.description}
+                            onChange={(e) => handleDescriptionChange(task.id, e.target.value)}
+                            onPointerDownCapture={(e) => e.stopPropagation()}
+                            placeholder="What are you working on?"
+                            className={`w-full bg-transparent text-sm font-medium placeholder:text-muted-foreground/60 border-none outline-none ${task.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                          />
+                          <div className="flex items-center gap-3 mt-2 flex-wrap">
+                            <button
+                              onClick={() => openTimePicker(task.id, 'startTime')}
+                              className="flex items-center gap-1 text-xs font-semibold font-tabular text-muted-foreground hover:text-primary"
+                            >
+                              <Clock size={11} />
+                              {formatDisplayTime(task.startTime)}
+                            </button>
+                            <span className="text-muted-foreground text-xs">→</span>
+                            <button
+                              onClick={() => openTimePicker(task.id, 'endTime')}
+                              className="flex items-center gap-1 text-xs font-semibold font-tabular text-muted-foreground hover:text-primary"
+                            >
+                              <Clock size={11} />
+                              {formatDisplayTime(task.endTime)}
+                            </button>
+                            <span className="text-xs text-muted-foreground">({duration})</span>
+                            <CategoryBadge category={task.category} size="sm" />
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteTask(task.id)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 flex-shrink-0"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </motion.div>
                   </div>
-                </div>
+                </motion.div>
               );
-            })}
+              })}
+            </AnimatePresence>
           </div>
         )}
 
@@ -484,14 +547,17 @@ export default function DailyPlannerClient() {
       </div>
 
       {/* Time picker modal */}
-      {timePickerOpen && timePickerTarget && (
-        <TimePickerModal
-          value={currentTimePickerValue}
-          label={timePickerTarget.field === 'startTime' ? 'Start Time' : 'End Time'}
-          onConfirm={handleTimeSelected}
-          onClose={() => { setTimePickerOpen(false); setTimePickerTarget(null); }}
-        />
-      )}
+      <AnimatePresence>
+        {timePickerOpen && timePickerTarget && (
+          <TimePickerModal
+            key="time-picker"
+            value={currentTimePickerValue}
+            label={timePickerTarget.field === 'startTime' ? 'Start Time' : 'End Time'}
+            onConfirm={handleTimeSelected}
+            onClose={() => { setTimePickerOpen(false); setTimePickerTarget(null); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,4 +1,5 @@
-// Backend integration point: replace with persistent storage (localStorage, IndexedDB, or API)
+// Shared task/reminder types, category config, and formatting helpers.
+// Persistence lives in useFirestoreCollection.ts (Firestore, per-user).
 
 export type Category = 'Work' | 'Personal' | 'Study' | 'Break' | 'Health' | 'Other';
 
@@ -45,43 +46,6 @@ export const CATEGORY_CHART_COLORS: Record<Category, string> = {
   Health: '#8B5CF6',
   Other: '#9CA3AF',
 };
-
-// Seed mock tasks for demo — backend integration replaces this
-export const MOCK_TASKS: Task[] = [
-  { id: 'task-001', date: '2026-08-20', startTime: '08:00', endTime: '09:30', description: 'Morning standup & sprint planning', category: 'Work', completed: true },
-  { id: 'task-002', date: '2026-08-20', startTime: '09:45', endTime: '11:30', description: 'Deep work: Feature development', category: 'Work', completed: true },
-  { id: 'task-003', date: '2026-08-20', startTime: '11:30', endTime: '12:00', description: 'Break — walk outside', category: 'Break', completed: false },
-  { id: 'task-004', date: '2026-08-20', startTime: '12:00', endTime: '13:00', description: 'Lunch & read', category: 'Personal', completed: false },
-  { id: 'task-005', date: '2026-08-20', startTime: '13:00', endTime: '15:00', description: 'Study: TypeScript advanced patterns', category: 'Study', completed: false },
-  { id: 'task-006', date: '2026-08-20', startTime: '15:00', endTime: '16:30', description: 'Code review & PR feedback', category: 'Work', completed: false },
-  { id: 'task-007', date: '2026-08-20', startTime: '17:00', endTime: '18:00', description: 'Gym session', category: 'Health', completed: false },
-  { id: 'task-008', date: '2026-08-19', startTime: '09:00', endTime: '11:00', description: 'Weekly report preparation', category: 'Work', completed: true },
-  { id: 'task-009', date: '2026-08-19', startTime: '11:00', endTime: '12:00', description: 'Meditation & journaling', category: 'Health', completed: true },
-  { id: 'task-010', date: '2026-08-19', startTime: '13:00', endTime: '15:00', description: 'Client call preparation', category: 'Work', completed: true },
-  { id: 'task-011', date: '2026-08-18', startTime: '08:30', endTime: '10:00', description: 'Product roadmap review', category: 'Work', completed: true },
-  { id: 'task-012', date: '2026-08-18', startTime: '10:30', endTime: '12:30', description: 'React course — Hooks deep dive', category: 'Study', completed: true },
-  { id: 'task-013', date: '2026-08-18', startTime: '14:00', endTime: '15:30', description: 'Grocery shopping', category: 'Personal', completed: true },
-  { id: 'task-014', date: '2026-08-17', startTime: '09:00', endTime: '12:00', description: 'Architecture planning session', category: 'Work', completed: true },
-  { id: 'task-015', date: '2026-08-17', startTime: '13:00', endTime: '14:00', description: 'Yoga flow', category: 'Health', completed: true },
-  { id: 'task-016', date: '2026-08-21', startTime: '09:00', endTime: '10:30', description: 'Team retrospective', category: 'Work', completed: false },
-  { id: 'task-017', date: '2026-08-21', startTime: '11:00', endTime: '12:00', description: 'Personal finance review', category: 'Personal', completed: false },
-  { id: 'task-018', date: '2026-08-21', startTime: '14:00', endTime: '16:00', description: 'Study: System design patterns', category: 'Study', completed: false },
-  { id: 'task-019', date: '2026-08-22', startTime: '08:00', endTime: '09:00', description: 'Morning run', category: 'Health', completed: false },
-  { id: 'task-020', date: '2026-08-22', startTime: '10:00', endTime: '12:30', description: 'Feature spec writing', category: 'Work', completed: false },
-];
-
-export const MOCK_REMINDERS: Reminder[] = [
-  { id: 'rem-001', taskName: 'Morning standup & sprint planning', date: '2026-08-20', time: '09:00', category: 'Work', note: 'Check Jira before joining', enabled: true, repeat: 'weekdays', repeatDays: [] },
-  { id: 'rem-002', taskName: 'Take vitamins', date: '2026-08-20', time: '08:00', category: 'Health', note: 'With breakfast', enabled: true, repeat: 'everyday', repeatDays: [] },
-  { id: 'rem-003', taskName: 'Gym session', date: '2026-08-20', time: '17:00', category: 'Health', note: 'Pack gym bag the night before', enabled: true, repeat: 'custom', repeatDays: [1, 3, 5] },
-  { id: 'rem-004', taskName: 'Personal finance review', date: '2026-08-21', time: '', category: 'Personal', note: 'Check monthly budget spreadsheet', enabled: false, repeat: 'none', repeatDays: [] },
-  { id: 'rem-005', taskName: 'Morning run', date: '2026-08-22', time: '07:30', category: 'Health', note: '5km route via the park', enabled: true, repeat: 'weekends', repeatDays: [] },
-  { id: 'rem-006', taskName: 'React course — Hooks deep dive', date: '2026-08-18', time: '', category: 'Study', note: 'Take notes in Notion', enabled: false, repeat: 'none', repeatDays: [] },
-];
-
-export function getTasksForDate(date: string): Task[] {
-  return MOCK_TASKS.filter((t) => t.date === date);
-}
 
 export function calcDuration(start: string, end: string): string {
   const [sh, sm] = start.split(':').map(Number);

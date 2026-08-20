@@ -1,8 +1,10 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Clock, CheckCircle2, Flame, TrendingUp, Calendar } from 'lucide-react';
-import { MOCK_TASKS, CATEGORY_CONFIG, CATEGORY_CHART_COLORS, calcDurationMinutes } from '@/lib/plannerData';
-import type { Category } from '@/lib/plannerData';
+import { CATEGORY_CONFIG, CATEGORY_CHART_COLORS, calcDurationMinutes } from '@/lib/plannerData';
+import type { Category, Task } from '@/lib/plannerData';
+import { useAuthUser } from '@/lib/useAuthUser';
+import { useTasks } from '@/lib/useFirestoreCollection';
 import CategoryPieChart from './CategoryPieChart';
 import WeeklyBarChart from './WeeklyBarChart';
 
@@ -17,25 +19,15 @@ const WEEK_DAYS = [
   { label: 'Wed 20', date: '2026-08-20' },
 ];
 
-// Supplement with realistic mock hours for days without tasks
-const SUPPLEMENTAL_HOURS: Record<string, number> = {
-  '2026-08-14': 5.5,
-  '2026-08-15': 2.0,
-  '2026-08-16': 0.5,
-};
-
-function getHoursForDate(date: string): number {
-  const tasks = MOCK_TASKS.filter((t) => t.date === date);
-  if (tasks.length > 0) {
-    const mins = tasks.reduce((acc, t) => acc + Math.max(0, calcDurationMinutes(t.startTime, t.endTime)), 0);
-    return Math.round((mins / 60) * 10) / 10;
-  }
-  return SUPPLEMENTAL_HOURS[date] ?? 0;
+function getHoursForDate(tasks: Task[], date: string): number {
+  const dayTasks = tasks.filter((t) => t.date === date);
+  const mins = dayTasks.reduce((acc, t) => acc + Math.max(0, calcDurationMinutes(t.startTime, t.endTime)), 0);
+  return Math.round((mins / 60) * 10) / 10;
 }
 
-function getCategoryBreakdown() {
+function getCategoryBreakdown(tasks: Task[]) {
   const totals: Partial<Record<Category, number>> = {};
-  MOCK_TASKS.forEach((t) => {
+  tasks.forEach((t) => {
     const mins = Math.max(0, calcDurationMinutes(t.startTime, t.endTime));
     totals[t.category] = (totals[t.category] ?? 0) + mins;
   });
@@ -46,28 +38,61 @@ function getCategoryBreakdown() {
   })).sort((a, b) => b.value - a.value);
 }
 
-function getWeeklyTableData() {
+function getWeeklyTableData(tasks: Task[]) {
   return WEEK_DAYS.map((day) => {
-    const tasks = MOCK_TASKS.filter((t) => t.date === day.date);
-    const hours = getHoursForDate(day.date);
-    const completed = tasks.filter((t) => t.completed).length;
-    const rate = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : null;
-    return { label: day.label, date: day.date, tasks: tasks.length, hours, completed, rate };
+    const dayTasks = tasks.filter((t) => t.date === day.date);
+    const hours = getHoursForDate(tasks, day.date);
+    const completed = dayTasks.filter((t) => t.completed).length;
+    const rate = dayTasks.length > 0 ? Math.round((completed / dayTasks.length) * 100) : null;
+    return { label: day.label, date: day.date, tasks: dayTasks.length, hours, completed, rate };
   });
 }
 
 export default function AnalyticsClient() {
+  const { uid, loading: authLoading } = useAuthUser();
+  const { data: tasks, loading: tasksLoading, error: tasksError } = useTasks();
   const [period, setPeriod] = useState<'week' | 'month'>('week');
-  const categoryData = getCategoryBreakdown();
-  const weeklyData = WEEK_DAYS.map((d) => ({ label: d.label, hours: getHoursForDate(d.date) }));
-  const tableData = getWeeklyTableData();
+
+  const categoryData = useMemo(() => getCategoryBreakdown(tasks), [tasks]);
+  const weeklyData = useMemo(
+    () => WEEK_DAYS.map((d) => ({ label: d.label, hours: getHoursForDate(tasks, d.date) })),
+    [tasks]
+  );
+  const tableData = useMemo(() => getWeeklyTableData(tasks), [tasks]);
 
   const totalHours = weeklyData.reduce((acc, d) => acc + d.hours, 0);
   const avgHours = Math.round((totalHours / 7) * 10) / 10;
   const topCat = categoryData[0];
-  const allTasks = MOCK_TASKS.filter((t) => WEEK_DAYS.some((d) => d.date === t.date));
+  const allTasks = useMemo(
+    () => tasks.filter((t) => WEEK_DAYS.some((d) => d.date === t.date)),
+    [tasks]
+  );
   const completedAll = allTasks.filter((t) => t.completed).length;
   const completionRate = allTasks.length > 0 ? Math.round((completedAll / allTasks.length) * 100) : 0;
+
+  if (authLoading || tasksLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 animate-pulse">
+          <TrendingUp size={28} className="text-primary" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Loading your analytics…</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">Just a moment while we crunch your numbers.</p>
+      </div>
+    );
+  }
+
+  if (tasksError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+          <TrendingUp size={28} className="text-red-500" />
+        </div>
+        <h3 className="text-base font-semibold text-foreground mb-1">Couldn&apos;t load your analytics</h3>
+        <p className="text-sm text-muted-foreground max-w-xs">{tasksError}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -82,7 +107,7 @@ export default function AnalyticsClient() {
             <button
               key={`period-${p}`}
               onClick={() => setPeriod(p)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150 capitalize ${
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-95 capitalize ${
                 period === p ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
               }`}
             >

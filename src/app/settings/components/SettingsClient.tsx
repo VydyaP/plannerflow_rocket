@@ -1,10 +1,13 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Tag, Sun, Moon, Bell, Download, Trash2, Plus, Pencil, Check, X,
   ChevronRight, AlertTriangle, Monitor,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthUser } from '@/lib/useAuthUser';
+import { useTheme, type ThemeMode } from '@/lib/useTheme';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -14,8 +17,6 @@ interface CustomCategory {
   color: string; // hex
   textColor: string; // hex
 }
-
-type ThemeMode = 'light' | 'dark' | 'system';
 
 interface ReminderDefaults {
   defaultTime: string; // HH:MM
@@ -72,7 +73,20 @@ function Section({ title, icon, children }: { title: string; icon: React.ReactNo
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+function getInitials(name: string | null, email: string | null): string {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    return parts.length === 1
+      ? parts[0].slice(0, 2).toUpperCase()
+      : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return (email ?? '?').slice(0, 2).toUpperCase();
+}
+
 export default function SettingsClient() {
+  const { user } = useAuthUser();
+  const [photoError, setPhotoError] = useState(false);
+
   // ── Categories state ──
   const [categories, setCategories] = useState<CustomCategory[]>(DEFAULT_CATEGORIES);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,7 +98,7 @@ export default function SettingsClient() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // ── Theme state ──
-  const [theme, setTheme] = useState<ThemeMode>('system');
+  const { theme, setTheme } = useTheme();
 
   // ── Reminder defaults ──
   const [reminderDefaults, setReminderDefaults] = useState<ReminderDefaults>({
@@ -103,7 +117,6 @@ export default function SettingsClient() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.categories) setCategories(parsed.categories);
-        if (parsed.theme) setTheme(parsed.theme);
         if (parsed.reminderDefaults) setReminderDefaults(parsed.reminderDefaults);
       }
     } catch {}
@@ -168,7 +181,6 @@ export default function SettingsClient() {
   // ── Theme handler ──
   function handleThemeChange(mode: ThemeMode) {
     setTheme(mode);
-    saveSettings({ theme: mode });
     toast.success(`Theme set to ${mode}`);
   }
 
@@ -215,6 +227,34 @@ export default function SettingsClient() {
         <p className="text-sm text-muted-foreground mt-1">Customize your PlannerFlow experience</p>
       </div>
 
+      {/* ── Account ── */}
+      <Link
+        href="/account"
+        className="flex items-center gap-4 p-4 bg-card border border-border rounded-2xl shadow-soft hover:bg-secondary/30 transition-all active:scale-[0.98]"
+      >
+        {user?.photoURL && !photoError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.photoURL}
+            alt={user.displayName ?? 'Account'}
+            referrerPolicy="no-referrer"
+            onError={() => setPhotoError(true)}
+            className="w-12 h-12 rounded-2xl object-cover flex-shrink-0"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <span className="text-sm font-bold text-primary">
+              {getInitials(user?.displayName ?? null, user?.email ?? null)}
+            </span>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{user?.displayName ?? 'Account'}</p>
+          <p className="text-xs text-muted-foreground truncate">{user?.email ?? 'Manage your profile'}</p>
+        </div>
+        <ChevronRight size={18} className="text-muted-foreground flex-shrink-0" />
+      </Link>
+
       {/* ── 1. Task Categories ── */}
       <Section title="Task Categories" icon={<Tag size={18} />}>
         <div className="space-y-2">
@@ -244,13 +284,13 @@ export default function SettingsClient() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => confirmEdit(cat.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-opacity"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-all active:scale-95"
                     >
                       <Check size={13} /> Save
                     </button>
                     <button
                       onClick={cancelEdit}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-all active:scale-95"
                     >
                       <X size={13} /> Cancel
                     </button>
@@ -263,13 +303,13 @@ export default function SettingsClient() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => deleteCategory(cat.id)}
-                      className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 transition-colors"
+                      className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 transition-all active:scale-95"
                     >
                       Delete
                     </button>
                     <button
                       onClick={() => setDeleteConfirmId(null)}
-                      className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-colors"
+                      className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-all active:scale-95"
                     >
                       Cancel
                     </button>
@@ -288,14 +328,14 @@ export default function SettingsClient() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => startEdit(cat)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all active:scale-95"
                       title="Edit"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => setDeleteConfirmId(cat.id)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
                       title="Delete"
                     >
                       <Trash2 size={14} />
@@ -331,13 +371,13 @@ export default function SettingsClient() {
               <div className="flex gap-2">
                 <button
                   onClick={addCategory}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-opacity"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-all active:scale-95"
                 >
                   <Check size={13} /> Add
                 </button>
                 <button
                   onClick={() => { setAddingNew(false); setNewName(''); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-all active:scale-95"
                 >
                   <X size={13} /> Cancel
                 </button>
@@ -346,7 +386,7 @@ export default function SettingsClient() {
           ) : (
             <button
               onClick={() => setAddingNew(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-all"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
             >
               <Plus size={15} /> Add Category
             </button>
@@ -365,7 +405,7 @@ export default function SettingsClient() {
             <button
               key={mode}
               onClick={() => handleThemeChange(mode)}
-              className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all duration-150 ${
+              className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all duration-150 active:scale-95 ${
                 theme === mode
                   ? 'border-primary bg-primary/10 text-primary shadow-soft'
                   : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-secondary/50'
@@ -378,7 +418,7 @@ export default function SettingsClient() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-3">
-          Theme preference is saved locally. Dark mode visual changes will be applied in a future update.
+          System matches your device&apos;s theme automatically, and switches live if it changes.
         </p>
       </Section>
 
@@ -424,7 +464,7 @@ export default function SettingsClient() {
             </div>
             <button
               onClick={() => updateReminderDefaults({ soundEnabled: !reminderDefaults.soundEnabled })}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+              className={`relative w-11 h-6 rounded-full transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/30 ${
                 reminderDefaults.soundEnabled ? 'bg-primary' : 'bg-muted'
               }`}
               role="switch"
@@ -456,7 +496,7 @@ export default function SettingsClient() {
             </div>
             <button
               onClick={handleExport}
-              className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-all active:scale-95"
             >
               Export <ChevronRight size={14} />
             </button>
@@ -477,13 +517,13 @@ export default function SettingsClient() {
               <div className="flex gap-2">
                 <button
                   onClick={handleReset}
-                  className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 transition-colors"
+                  className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 transition-all active:scale-95"
                 >
                   Confirm
                 </button>
                 <button
                   onClick={() => setShowResetConfirm(false)}
-                  className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-colors"
+                  className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium hover:bg-muted transition-all active:scale-95"
                 >
                   Cancel
                 </button>
@@ -491,7 +531,7 @@ export default function SettingsClient() {
             ) : (
               <button
                 onClick={() => setShowResetConfirm(true)}
-                className="flex items-center gap-1.5 px-4 py-2 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-100 transition-all active:scale-95"
               >
                 <AlertTriangle size={14} /> Reset
               </button>
