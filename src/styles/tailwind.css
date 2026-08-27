@@ -90,6 +90,7 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
   html {
     scroll-behavior: smooth;
@@ -172,5 +173,17 @@
   @keyframes fadeOut {
     from { opacity: 1; transform: translateY(0); }
     to { opacity: 0; transform: translateY(-8px); }
+  }
+}
+
+/* Mobile browsers auto-zoom the page when a focused input's font-size is
+   under 16px. !important because a plain element selector otherwise loses
+   to any Tailwind text-sm/text-xs class (class selectors outrank element
+   selectors regardless of source order). */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
   }
 }

@@ -242,7 +242,7 @@ export default function DailyPlannerClient() {
           >
             <ChevronLeft size={18} />
           </button>
-          <div className="flex gap-1 flex-1 overflow-x-auto scrollbar-hide">
+          <div className="flex gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide">
             {dateRange.map((date) => {
               const key = formatDateKey(date);
               const isActive = key === dateKey;
