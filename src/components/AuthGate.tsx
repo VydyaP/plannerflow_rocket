@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Flame, LayoutList, BarChart2, Bell } from 'lucide-react';
 import { useAuthUser, signInWithGoogle } from '@/lib/useAuthUser';
@@ -95,6 +96,10 @@ function SignInScreen() {
           {signingIn ? 'Signing in…' : 'Sign in with Google'}
         </button>
         {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+
+        <Link href="/privacy" className="block mt-5 text-xs text-muted-foreground hover:text-foreground hover:underline">
+          Privacy Policy
+        </Link>
       </motion.div>
     </div>
   );
