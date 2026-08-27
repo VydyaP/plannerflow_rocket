@@ -539,6 +539,12 @@ export default function SettingsClient() {
           </div>
         </div>
       </Section>
+
+      <div className="text-center">
+        <Link href="/privacy" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+          Privacy Policy
+        </Link>
+      </div>
     </div>
   );
 }

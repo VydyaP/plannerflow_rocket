@@ -1,11 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Flame, LayoutList, BarChart2, Bell } from 'lucide-react';
 import { useAuthUser, signInWithGoogle } from '@/lib/useAuthUser';
 import { DataProvider } from '@/lib/useFirestoreCollection';
 import { fadeInUp } from '@/lib/motion';
+
+// Routes that must stay reachable without signing in — e.g. the privacy
+// policy, which Play Console's review and data-safety checks fetch directly.
+const PUBLIC_PATHS = ['/privacy'];
 
 function GoogleIcon() {
   return (
@@ -96,8 +101,10 @@ function SignInScreen() {
 }
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { user, loading } = useAuthUser();
 
+  if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>;
   if (loading) return <LoadingSplash />;
   if (!user) return <SignInScreen />;
   return <DataProvider uid={user.uid}>{children}</DataProvider>;
