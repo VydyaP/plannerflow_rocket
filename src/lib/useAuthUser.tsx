@@ -51,7 +51,9 @@ export function useAuthUser(): AuthUserState {
 }
 
 export async function signInWithGoogle(): Promise<void> {
-  await signInWithPopup(auth, new GoogleAuthProvider());
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  await signInWithPopup(auth, provider);
 }
 
 export async function signOutUser(): Promise<void> {
