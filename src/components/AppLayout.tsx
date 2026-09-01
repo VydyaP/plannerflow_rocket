@@ -15,7 +15,7 @@ export default function AppLayout({ children, activePath }: AppLayoutProps) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar activePath={activePath} />
-      <main className="flex-1 lg:ml-64 pb-20 lg:pb-0 min-h-screen">
+      <main className="flex-1 min-w-0 lg:ml-64 pb-20 lg:pb-0 min-h-screen">
         <motion.div
           initial="initial"
           animate="animate"
