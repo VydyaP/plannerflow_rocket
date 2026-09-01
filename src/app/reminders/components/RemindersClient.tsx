@@ -127,8 +127,21 @@ export default function RemindersClient() {
   };
 
   const handleDelete = (id: string) => {
+    const deleted = reminders.find((r) => r.id === id);
     removeReminder(id)
-      .then(() => toast.success('Reminder removed'))
+      .then(() => {
+        toast.success('Reminder removed', {
+          action: deleted
+            ? {
+                label: 'Undo',
+                onClick: () => {
+                  const { id: _omit, ...rest } = deleted;
+                  addReminder(rest).catch((err) => reportError(err, 'Could not restore reminder'));
+                },
+              }
+            : undefined,
+        });
+      })
       .catch((err) => reportError(err, 'Could not delete reminder'));
   };
 

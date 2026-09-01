@@ -97,8 +97,21 @@ export default function DailyPlannerClient() {
   };
 
   const handleDeleteTask = (id: string) => {
+    const deleted = tasks.find((t) => t.id === id);
     removeTask(id)
-      .then(() => toast.success('Task removed'))
+      .then(() => {
+        toast.success('Task removed', {
+          action: deleted
+            ? {
+                label: 'Undo',
+                onClick: () => {
+                  const { id: _omit, ...rest } = deleted;
+                  addTask(rest).catch((err) => reportError(err, 'Could not restore task'));
+                },
+              }
+            : undefined,
+        });
+      })
       .catch((err) => reportError(err, 'Could not delete task'));
   };
 
